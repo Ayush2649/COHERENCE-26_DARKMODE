@@ -29,8 +29,12 @@ export async function POST(request) {
       progress,
       completed,
       total,
+      needsDelay: result.needsDelay || false,
+      hasReadyLeads: result.hasReadyLeads !== undefined ? result.hasReadyLeads : true,
+      nextReadyAt: result.nextReadyAt || null,
     });
   } catch (error) {
+    console.error("Campaign step error:", error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

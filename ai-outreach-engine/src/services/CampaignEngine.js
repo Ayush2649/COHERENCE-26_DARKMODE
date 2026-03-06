@@ -5,12 +5,30 @@
  * This simulates a job queue processor for our hackathon MVP.
  * 
  * Returns enriched log entries with `logType` for the live feed UI.
+ * 
+ * Key behaviours:
+ * - Wait nodes enforce REAL durations (seconds, minutes, hours, days).
+ * - Email nodes are processed ONE lead at a time per tick so the caller
+ *   can insert a natural 2-second gap between sends.
+ * - No demo mode — timing is always real.
  */
 const Workflow = require("../models/Workflow");
 const Lead = require("../models/Lead");
 const Campaign = require("../models/Campaign");
 const EmailLog = require("../models/EmailLog");
 const SafetyService = require("./SafetyService");
+
+/** Convert a duration + unit string to milliseconds */
+function durationToMs(duration, unit) {
+  const d = Number(duration) || 0;
+  switch ((unit || "Days").toLowerCase()) {
+    case "seconds": case "second": case "sec": case "s": return d * 1000;
+    case "minutes": case "minute": case "min":           return d * 60_000;
+    case "hours":   case "hour":   case "hr":            return d * 3_600_000;
+    case "days":    case "day":                          return d * 86_400_000;
+    default:                                             return d * 86_400_000;
+  }
+}
 
 function generateMockEmail(lead, node) {
   // Use node-specific subject/body if available (from AI agent)
@@ -44,7 +62,8 @@ class CampaignEngine {
     for (const lead of leads) {
       Lead.update(lead.id, { 
         status: 'contacted', 
-        currentStep: startNode.id 
+        currentStep: startNode.id,
+        waitUntil: null
       });
     }
 
@@ -52,8 +71,13 @@ class CampaignEngine {
   }
 
   /**
-   * Process ONE lead per call to enable one-by-one staggered feeding.
-   * Returns enriched logs with `logType` for the live feed UI.
+   * Process ONE tick of the campaign.
+   * 
+   * For email/followup nodes: processes only ONE lead per call so the
+   * caller can add a natural 2-second gap between sends.
+   * 
+   * For all other nodes (start, wait, condition, end): processes ALL
+   * leads in a single call.
    */
   static async processStep(campaignId) {
     const campaign = Campaign.findById(campaignId);
@@ -76,6 +100,7 @@ class CampaignEngine {
       let nextNodeId = null;
       let logMessage = "";
       let logType = "info";
+      let extraData = {};
 
       switch (currentNode.type) {
         case 'start': {
@@ -91,8 +116,11 @@ class CampaignEngine {
           
           const safetyCheck = SafetyService.checkSafety(lead.id, campaign.id, emailData.subject);
           if (!safetyCheck.safe) {
-            logMessage = `Safety Blocked: ${safetyCheck.reason}`;
-            logType = "blocked";
+            // Duplicate — skip silently (don't show as blocked)
+            const edge = edges.find(e => e.source === currentNode.id);
+            if (edge) nextNodeId = edge.target;
+            logMessage = `Skipped (duplicate)`;
+            logType = "info";
             break;
           }
 
@@ -108,16 +136,58 @@ class CampaignEngine {
           if (edge) nextNodeId = edge.target;
           logMessage = `Email sent: "${emailData.subject}"`;
           logType = "sent";
-          break;
+
+          // After processing ONE email lead, push log and return immediately
+          // so the caller can wait 2 seconds before the next send.
+          if (nextNodeId && currentNode.type !== 'end') {
+            Lead.update(lead.id, { currentStep: nextNodeId, waitUntil: null });
+          }
+          actionLogs.push({
+            leadName: lead.name,
+            company: lead.company,
+            action: logMessage,
+            nodeType: currentNode.type,
+            logType,
+            ...extraData
+          });
+          return { processedCount: 1, logs: actionLogs, needsDelay: true };
         }
 
         case 'wait': {
+          const dur = (currentNode.data && currentNode.data.duration != null) ? currentNode.data.duration : 1;
+          const unit = (currentNode.data && currentNode.data.unit) ? currentNode.data.unit : 'Days';
+          const waitMs = durationToMs(dur, unit);
+
+          // If lead doesn't have a waitUntil yet, set it now
+          if (!lead.waitUntil) {
+            const waitUntilTime = new Date(Date.now() + waitMs).toISOString();
+            Lead.update(lead.id, { waitUntil: waitUntilTime });
+            logMessage = `Waiting ${dur} ${unit}...`;
+            logType = "waiting";
+            extraData.remainingMs = waitMs;
+            // Don't advance — lead stays on this node
+            break;
+          }
+
+          // Check if wait has elapsed
+          const waitUntilDate = new Date(lead.waitUntil);
+          const remainingMs = waitUntilDate.getTime() - Date.now();
+
+          if (remainingMs > 0) {
+            // Still waiting
+            logMessage = `Waiting... ${formatRemaining(remainingMs)} remaining`;
+            logType = "waiting";
+            extraData.remainingMs = remainingMs;
+            break;
+          }
+
+          // Wait is over — advance to next node
           const edge = edges.find(e => e.source === currentNode.id);
           if (edge) nextNodeId = edge.target;
-          const dur = currentNode.data.duration || 1;
-          const unit = currentNode.data.unit || 'Days';
           logMessage = `Finished waiting (${dur} ${unit})`;
           logType = "waiting";
+          // Clear waitUntil
+          Lead.update(lead.id, { waitUntil: null });
           break;
         }
           
@@ -143,8 +213,10 @@ class CampaignEngine {
           
           const safetyCheck = SafetyService.checkSafety(lead.id, campaign.id, followupSubject);
           if (!safetyCheck.safe) {
-            logMessage = `Safety Blocked: ${safetyCheck.reason}`;
-            logType = "blocked";
+            const edge = edges.find(e => e.source === currentNode.id);
+            if (edge) nextNodeId = edge.target;
+            logMessage = `Skipped (duplicate)`;
+            logType = "info";
             break;
           }
 
@@ -160,11 +232,24 @@ class CampaignEngine {
           if (edge) nextNodeId = edge.target;
           logMessage = `Follow-up sent`;
           logType = "sent";
-          break;
+
+          // Same one-at-a-time behaviour as sendEmail
+          if (nextNodeId && currentNode.type !== 'end') {
+            Lead.update(lead.id, { currentStep: nextNodeId, waitUntil: null });
+          }
+          actionLogs.push({
+            leadName: lead.name,
+            company: lead.company,
+            action: logMessage,
+            nodeType: currentNode.type,
+            logType,
+            ...extraData
+          });
+          return { processedCount: 1, logs: actionLogs, needsDelay: true };
         }
 
         case 'end': {
-          Lead.update(lead.id, { currentStep: 'none' });
+          Lead.update(lead.id, { currentStep: 'none', waitUntil: null });
           if (lead.status === 'contacted') {
              Lead.update(lead.id, { status: 'converted' });
           }
@@ -175,7 +260,7 @@ class CampaignEngine {
       }
 
       if (nextNodeId && currentNode.type !== 'end') {
-        Lead.update(lead.id, { currentStep: nextNodeId });
+        Lead.update(lead.id, { currentStep: nextNodeId, waitUntil: null });
       }
 
       actionLogs.push({
@@ -183,12 +268,63 @@ class CampaignEngine {
         company: lead.company,
         action: logMessage,
         nodeType: currentNode.type,
-        logType
+        logType,
+        ...extraData
       });
     }
 
-    return { processedCount: activeLeads.length, logs: actionLogs };
+    // Determine if there are leads ready to process on the NEXT tick
+    // Re-read leads after processing to get updated state
+    const updatedLeads = Lead.findAll();
+    const stillActive = updatedLeads.filter(l => l.currentStep && l.currentStep !== 'none' && l.status === 'contacted');
+    
+    let hasReadyLeads = false;
+    let nextReadyAt = null;
+
+    for (const lead of stillActive) {
+      const node = nodes.find(n => n.id === lead.currentStep);
+      if (!node) continue;
+
+      if (node.type === 'wait' && lead.waitUntil) {
+        // Lead is waiting — check when it'll be ready
+        const readyTime = new Date(lead.waitUntil).getTime();
+        if (readyTime <= Date.now()) {
+          hasReadyLeads = true; // wait already elapsed
+        } else {
+          // Track earliest future wait expiry
+          if (!nextReadyAt || readyTime < nextReadyAt) {
+            nextReadyAt = readyTime;
+          }
+        }
+      } else {
+        // Lead on a non-wait node = ready to process now
+        hasReadyLeads = true;
+      }
+    }
+
+    return { 
+      processedCount: activeLeads.length, 
+      logs: actionLogs, 
+      hasReadyLeads, 
+      nextReadyAt 
+    };
   }
+}
+
+/** Human-friendly remaining time string */
+function formatRemaining(ms) {
+  if (ms <= 0) return "0s";
+  const totalSec = Math.ceil(ms / 1000);
+  if (totalSec < 60) return `${totalSec}s`;
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  if (min < 60) return `${min}m ${sec}s`;
+  const hr = Math.floor(min / 60);
+  const remMin = min % 60;
+  if (hr < 24) return `${hr}h ${remMin}m`;
+  const days = Math.floor(hr / 24);
+  const remHr = hr % 24;
+  return `${days}d ${remHr}h`;
 }
 
 module.exports = CampaignEngine;

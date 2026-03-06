@@ -30,10 +30,10 @@ const Campaign = {
   create(data) {
     const id = uuidv4();
     const stmt = db.prepare(`
-      INSERT INTO campaigns (id, workflowId, name)
-      VALUES (?, ?, ?)
+      INSERT INTO campaigns (id, workflowId, name, status)
+      VALUES (?, ?, ?, ?)
     `);
-    stmt.run(id, data.workflowId, data.name || "Untitled Campaign");
+    stmt.run(id, data.workflowId, data.name || "Untitled Campaign", data.status || "draft");
     return Campaign.findById(id);
   },
 

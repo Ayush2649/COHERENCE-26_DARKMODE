@@ -102,7 +102,7 @@ const Lead = {
 
     /* Dynamically build SET clause from provided fields */
     for (const [key, value] of Object.entries(data)) {
-      if (["name", "email", "company", "role", "status", "currentStep"].includes(key)) {
+      if (["name", "email", "company", "role", "status", "currentStep", "waitUntil"].includes(key)) {
         fields.push(`${key} = ?`);
         values.push(value);
       }
