@@ -17,6 +17,7 @@ const Lead = require("../models/Lead");
 const Campaign = require("../models/Campaign");
 const EmailLog = require("../models/EmailLog");
 const SafetyService = require("./SafetyService");
+const EmailService = require("./EmailService");
 
 /** Convert a duration + unit string to milliseconds */
 function durationToMs(duration, unit) {
@@ -116,7 +117,6 @@ class CampaignEngine {
           
           const safetyCheck = SafetyService.checkSafety(lead.id, campaign.id, emailData.subject);
           if (!safetyCheck.safe) {
-            // Duplicate — skip silently (don't show as blocked)
             const edge = edges.find(e => e.source === currentNode.id);
             if (edge) nextNodeId = edge.target;
             logMessage = `Skipped (duplicate)`;
@@ -124,21 +124,24 @@ class CampaignEngine {
             break;
           }
 
+          // Send real email via Gmail
+          const sendResult = await EmailService.sendEmail(lead.email, emailData.subject, emailData.body);
+
           EmailLog.create({
             leadId: lead.id,
             campaignId: campaign.id,
             subject: emailData.subject,
             message: emailData.body,
-            status: 'sent'
+            status: sendResult.success ? 'sent' : 'failed'
           });
           
           const edge = edges.find(e => e.source === currentNode.id);
           if (edge) nextNodeId = edge.target;
-          logMessage = `Email sent: "${emailData.subject}"`;
-          logType = "sent";
+          logMessage = sendResult.success
+            ? `✅ Email sent to ${lead.email}: "${emailData.subject}"`
+            : `❌ Email failed to ${lead.email}: ${sendResult.error}`;
+          logType = sendResult.success ? "sent" : "error";
 
-          // After processing ONE email lead, push log and return immediately
-          // so the caller can wait 2 seconds before the next send.
           if (nextNodeId && currentNode.type !== 'end') {
             Lead.update(lead.id, { currentStep: nextNodeId, waitUntil: null });
           }
@@ -209,7 +212,9 @@ class CampaignEngine {
         }
 
         case 'sendFollowup': {
-          const followupSubject = `Re: Quick question regarding ${lead.company}`;
+          const followupData = generateMockEmail(lead, currentNode);
+          const followupSubject = followupData.subject || `Re: Quick question regarding ${lead.company}`;
+          const followupBody = followupData.body || `<p>Hi ${lead.name},</p><p>Just following up on my last email!</p>`;
           
           const safetyCheck = SafetyService.checkSafety(lead.id, campaign.id, followupSubject);
           if (!safetyCheck.safe) {
@@ -220,20 +225,24 @@ class CampaignEngine {
             break;
           }
 
+          // Send real follow-up email via Gmail
+          const followupResult = await EmailService.sendEmail(lead.email, followupSubject, followupBody);
+
           EmailLog.create({
             leadId: lead.id,
             campaignId: campaign.id,
             subject: followupSubject,
-            message: `<p>Hi ${lead.name},</p><p>Just following up on my last email!</p>`,
-            status: 'sent'
+            message: followupBody,
+            status: followupResult.success ? 'sent' : 'failed'
           });
           
           const edge = edges.find(e => e.source === currentNode.id);
           if (edge) nextNodeId = edge.target;
-          logMessage = `Follow-up sent`;
-          logType = "sent";
+          logMessage = followupResult.success
+            ? `✅ Follow-up sent to ${lead.email}`
+            : `❌ Follow-up failed to ${lead.email}: ${followupResult.error}`;
+          logType = followupResult.success ? "sent" : "error";
 
-          // Same one-at-a-time behaviour as sendEmail
           if (nextNodeId && currentNode.type !== 'end') {
             Lead.update(lead.id, { currentStep: nextNodeId, waitUntil: null });
           }
