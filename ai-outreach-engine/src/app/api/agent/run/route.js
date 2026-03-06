@@ -84,16 +84,19 @@ Return ONLY valid JSON with no markdown, no backticks, no explanation. Format:
     let targetLeads = [];
     
     if (intent.targetAudience) {
-      const keywords = intent.targetAudience.toLowerCase().split(' ').filter(w => w.length > 2);
+      const keywords = intent.targetAudience.toLowerCase().split(/[\s,]+/).filter(w => w.length > 2);
       targetLeads = allLeads.filter(lead => {
         const role = (lead.role || "").toLowerCase();
         const company = (lead.company || "").toLowerCase();
-        return keywords.some(kw => role.includes(kw) || company.includes(kw));
+        const name = (lead.name || "").toLowerCase();
+        const email = (lead.email || "").toLowerCase();
+        const haystack = `${role} ${company} ${name} ${email}`;
+        return keywords.some(kw => haystack.includes(kw));
       });
     }
 
-    // Fallback if filter is too narrow
-    if (targetLeads.length < 3) {
+    // Only fall back to ALL leads if zero matched (not a threshold of 3)
+    if (targetLeads.length === 0) {
       targetLeads = allLeads;
     }
 
@@ -106,7 +109,7 @@ Return ONLY valid JSON with no markdown, no backticks, no explanation. Format:
     for (let i = 0; i < intent.numberOfSteps; i++) {
        workflowPlan.push({ type: "sendEmail", label: `Email ${i+1}`, emailIndex: i });
        if (i < intent.numberOfSteps - 1) {
-         workflowPlan.push({ type: "wait", label: `Wait ${daysWait} Days`, days: daysWait });
+         workflowPlan.push({ type: "wait", label: `Wait ${daysWait} Days`, duration: daysWait, unit: "Days" });
          daysWait++; // 2 days, then 3 days, etc.
        }
     }
@@ -161,7 +164,7 @@ Make each email in the sequence feel different — first is introduction, second
         position: { x: 250, y: index * 120 },
         data: { 
           label: step.label,
-          ...(step.type === 'wait' && { duration: step.days, unit: "Days" }),
+          ...(step.type === 'wait' && { duration: step.duration || step.days || 2, unit: step.unit || "Days" }),
           ...(step.type === 'sendEmail' && { 
              subject: emails[step.emailIndex].subject, 
              body: emails[step.emailIndex].body 

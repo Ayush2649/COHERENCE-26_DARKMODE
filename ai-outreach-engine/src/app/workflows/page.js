@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import {
   ReactFlow,
   Controls,
@@ -69,6 +69,83 @@ export default function WorkflowsPage() {
       console.error("Failed to fetch workflows:", error);
     }
   };
+
+  const [isLiveMode, setIsLiveMode] = useState(false);
+  const [progress, setProgress] = useState(null);
+
+  useEffect(() => {
+    fetchWorkflows();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && savedWorkflows.length > 0) {
+      const params = new URLSearchParams(window.location.search);
+      const urlWorkflowId = params.get('load');
+      const urlCampaignId = params.get('campaignId');
+
+      if (urlWorkflowId) {
+        const wf = savedWorkflows.find(w => w.id.toString() === urlWorkflowId);
+        if (wf && wf.name !== workflowName) {
+           loadWorkflow(wf);
+        }
+      }
+
+      if (urlCampaignId && !progress) {
+        setIsLiveMode(true);
+        fetch(`/api/campaigns/${urlCampaignId}/progress`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.success) setProgress(data.data);
+          });
+      }
+    }
+  }, [savedWorkflows]);
+
+  const handleNodeActionSave = async (nodeId, updatedData) => {
+    // Optimistic update
+    setNodes(nds => nds.map(n => {
+      if (n.id === nodeId) return { ...n, data: { ...n.data, ...updatedData } };
+      return n;
+    }));
+
+    // Server update
+    const params = new URLSearchParams(window.location.search);
+    const wfId = params.get('load');
+    if (wfId) {
+      try {
+        await fetch(`/api/workflows/${wfId}/node`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nodeId, updatedData })
+        });
+        setMessage("✅ Node updated — changes apply on next campaign tick");
+        setTimeout(() => setMessage(""), 4000);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  };
+
+  const mappedNodes = useMemo(() => {
+    return nodes.map(node => {
+      let nodeState = null;
+      if (progress) {
+        if (progress.completedNodeIds.includes(node.id)) nodeState = 'completed';
+        else if (progress.currentNodeId === node.id) nodeState = 'current';
+        else if (progress.futureNodeIds.includes(node.id)) nodeState = 'future';
+      }
+
+      return {
+        ...node,
+        draggable: !isLiveMode,
+        data: {
+          ...node.data,
+          nodeState,
+          onSave: handleNodeActionSave
+        }
+      };
+    });
+  }, [nodes, progress, isLiveMode]);
 
   // Switch to a different workflow
   const loadWorkflow = (workflow) => {
@@ -154,8 +231,11 @@ export default function WorkflowsPage() {
             onChange={(e) => setWorkflowName(e.target.value)}
             className="w-64 font-medium border-transparent focus-visible:ring-1 bg-transparent hover:bg-muted/50 px-2 h-8"
           />
+          {isLiveMode && (
+             <Badge className="bg-blue-500 hover:bg-blue-600 ml-2 animate-pulse">Running Live Mode</Badge>
+          )}
           {message && (
-            <Badge variant="outline" className="bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20">
+            <Badge variant="outline" className={`border bg-opacity-10 shadow-sm ${message.includes('✅') ? 'bg-green-500 text-green-600 dark:text-green-400 border-green-500/20' : 'bg-muted text-foreground'}`}>
               {message}
             </Badge>
           )}
@@ -209,56 +289,58 @@ export default function WorkflowsPage() {
 
       <div className="flex flex-1 overflow-hidden relative">
         {/* Left Sidebar - Node Palette */}
-        <div className="w-64 border-r border-border/50 bg-card/30 p-4 flex flex-col gap-4 z-10 backdrop-blur-md">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-2">Actions</h3>
-          
-          <Card 
-            className="p-3 cursor-pointer hover:border-blue-500/50 hover:bg-blue-500/5 transition-colors border-border/50 flex items-center gap-3"
-            onClick={() => addNode('sendEmail', 'Send Email')}
-          >
-            <span className="text-2xl">📧</span>
-            <div className="text-sm font-medium">Send Email</div>
-          </Card>
-          
-          <Card 
-            className="p-3 cursor-pointer hover:border-purple-500/50 hover:bg-purple-500/5 transition-colors border-border/50 flex items-center gap-3"
-            onClick={() => addNode('sendFollowup', 'Follow-up Email')}
-          >
-            <span className="text-2xl">🔄</span>
-            <div className="text-sm font-medium">Follow-up</div>
-          </Card>
+        {!isLiveMode && (
+          <div className="w-64 border-r border-border/50 bg-card/30 p-4 flex flex-col gap-4 z-10 backdrop-blur-md">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-2">Actions</h3>
+            
+            <Card 
+              className="p-3 cursor-pointer hover:border-blue-500/50 hover:bg-blue-500/5 transition-colors border-border/50 flex items-center gap-3"
+              onClick={() => addNode('sendEmail', 'Send Email')}
+            >
+              <span className="text-2xl">📧</span>
+              <div className="text-sm font-medium">Send Email</div>
+            </Card>
+            
+            <Card 
+              className="p-3 cursor-pointer hover:border-purple-500/50 hover:bg-purple-500/5 transition-colors border-border/50 flex items-center gap-3"
+              onClick={() => addNode('sendFollowup', 'Follow-up Email')}
+            >
+              <span className="text-2xl">🔄</span>
+              <div className="text-sm font-medium">Follow-up</div>
+            </Card>
 
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mt-4 mb-2">Rules / Logic</h3>
-          
-          <Card 
-            className="p-3 cursor-pointer hover:border-amber-500/50 hover:bg-amber-500/5 transition-colors border-border/50 flex items-center gap-3"
-            onClick={() => addNode('wait', 'Time Delay')}
-          >
-            <span className="text-2xl">⏳</span>
-            <div className="text-sm font-medium">Time Delay</div>
-          </Card>
-          
-          <Card 
-            className="p-3 cursor-pointer hover:border-orange-500/50 hover:bg-orange-500/5 transition-colors border-border/50 flex items-center gap-3"
-            onClick={() => addNode('condition', 'If / Else Split')}
-          >
-            <span className="text-2xl">🔀</span>
-            <div className="text-sm font-medium">Condition Split</div>
-          </Card>
-          
-          <Card 
-            className="p-3 cursor-pointer hover:border-destructive/50 hover:bg-destructive/5 transition-colors border-border/50 flex items-center gap-3 mt-auto"
-            onClick={() => addNode('end', 'End Flow')}
-          >
-            <span className="text-2xl">🛑</span>
-            <div className="text-sm font-medium">End Workflow</div>
-          </Card>
-        </div>
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mt-4 mb-2">Rules / Logic</h3>
+            
+            <Card 
+              className="p-3 cursor-pointer hover:border-amber-500/50 hover:bg-amber-500/5 transition-colors border-border/50 flex items-center gap-3"
+              onClick={() => addNode('wait', 'Time Delay')}
+            >
+              <span className="text-2xl">⏳</span>
+              <div className="text-sm font-medium">Time Delay</div>
+            </Card>
+            
+            <Card 
+              className="p-3 cursor-pointer hover:border-orange-500/50 hover:bg-orange-500/5 transition-colors border-border/50 flex items-center gap-3"
+              onClick={() => addNode('condition', 'If / Else Split')}
+            >
+              <span className="text-2xl">🔀</span>
+              <div className="text-sm font-medium">Condition Split</div>
+            </Card>
+            
+            <Card 
+               className="p-3 cursor-pointer hover:border-destructive/50 hover:bg-destructive/5 transition-colors border-border/50 flex items-center gap-3 mt-auto"
+               onClick={() => addNode('end', 'End Flow')}
+            >
+              <span className="text-2xl">🛑</span>
+              <div className="text-sm font-medium">End Workflow</div>
+            </Card>
+          </div>
+        )}
 
         {/* React Flow Canvas */}
         <div className="flex-1" ref={reactFlowWrapper}>
           <ReactFlow
-            nodes={nodes}
+            nodes={mappedNodes}
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}

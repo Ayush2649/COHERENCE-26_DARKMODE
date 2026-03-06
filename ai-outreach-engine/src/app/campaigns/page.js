@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -178,7 +179,13 @@ export default function CampaignsPage() {
                   <div className="space-y-6">
                     <div className="rounded-lg bg-primary/10 p-4 border border-primary/20">
                       <div className="text-xs font-semibold text-primary uppercase tracking-wider mb-1">Active Campaign</div>
-                      <div className="font-medium truncate">{activeCampaign.name}</div>
+                      <div className="font-medium truncate mb-3">{activeCampaign.name}</div>
+                      
+                      <Link href={`/workflows?load=${activeCampaign.workflowId}&campaignId=${activeCampaign.id}`}>
+                        <Button variant="outline" size="sm" className="w-full gap-2 border-amber-500/30 text-amber-600 hover:bg-amber-500/10 dark:text-amber-400">
+                          <span>✏️</span> Edit Live Workflow
+                        </Button>
+                      </Link>
                     </div>
 
                     <div className="space-y-2">

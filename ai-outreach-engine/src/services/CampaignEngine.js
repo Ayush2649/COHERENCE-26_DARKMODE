@@ -3,6 +3,8 @@
  * 
  * Handles the logic of moving leads through a workflow.
  * This simulates a job queue processor for our hackathon MVP.
+ * 
+ * Returns enriched log entries with `logType` for the live feed UI.
  */
 const Workflow = require("../models/Workflow");
 const Lead = require("../models/Lead");
@@ -10,10 +12,14 @@ const Campaign = require("../models/Campaign");
 const EmailLog = require("../models/EmailLog");
 const SafetyService = require("./SafetyService");
 
-// In a real app, we'd use the actual API, but for simulation we can just mimic it or call it directly.
-// To keep things simple and fast for the simulator, we'll use a local mock for AI generation here,
-// since calling the actual HTTP route from within the server is trickier and slower.
-function generateMockEmail(lead) {
+function generateMockEmail(lead, node) {
+  // Use node-specific subject/body if available (from AI agent)
+  if (node && node.data && node.data.subject) {
+    return {
+      subject: node.data.subject.replace(/\{\{name\}\}/g, lead.name || '').replace(/\{\{company\}\}/g, lead.company || '').replace(/\{\{role\}\}/g, lead.role || ''),
+      body: (node.data.body || '').replace(/\{\{name\}\}/g, lead.name || '').replace(/\{\{company\}\}/g, lead.company || '').replace(/\{\{role\}\}/g, lead.role || '')
+    };
+  }
   return {
     subject: `Quick question regarding ${lead.company || 'your team'}`,
     body: `<p>Hi ${lead.name},</p><p>I noticed your work as ${lead.role || 'a leader'} at ${lead.company || 'your company'} and wanted to reach out.</p><p>Would you be open to a 5-minute chat next week?</p><p>Best,<br>Alex</p>`
@@ -23,12 +29,10 @@ function generateMockEmail(lead) {
 class CampaignEngine {
   /**
    * Initialize and start a campaign for all "new" leads.
-   * Creates Campaign record and sets leads to Start node.
    */
   static async startCampaign(workflowId, name) {
     const campaign = Campaign.create({ workflowId, name });
     
-    // Get workflow to find start node
     const workflow = Workflow.findById(workflowId);
     if (!workflow) throw new Error("Workflow not found");
     
@@ -36,7 +40,6 @@ class CampaignEngine {
     const startNode = nodes.find(n => n.type === 'start');
     if (!startNode) throw new Error("Workflow must have a Start node");
 
-    // Get all new leads and attach them to start node
     const leads = Lead.findAll('new');
     for (const lead of leads) {
       Lead.update(lead.id, { 
@@ -45,24 +48,22 @@ class CampaignEngine {
       });
     }
 
-    // Update campaign status
     return Campaign.update(campaign.id, { status: 'running', startTime: new Date().toISOString() });
   }
 
   /**
-   * Process a single step for all leads currently in the campaign.
-   * Returns a log of actions taken.
+   * Process ONE lead per call to enable one-by-one staggered feeding.
+   * Returns enriched logs with `logType` for the live feed UI.
    */
   static async processStep(campaignId) {
     const campaign = Campaign.findById(campaignId);
     if (!campaign || campaign.status !== 'running') return { logs: [] };
 
+    // Re-read workflow from DB on every tick (so live edits apply)
     const workflow = Workflow.findById(campaign.workflowId);
     const nodes = typeof workflow.nodes === 'string' ? JSON.parse(workflow.nodes) : workflow.nodes;
     const edges = typeof workflow.edges === 'string' ? JSON.parse(workflow.edges) : workflow.edges;
 
-    // We only process leads that are currently engaged (not new, not unsubscribed, not converted)
-    // For MVP, we'll just query all leads and filter in memory since we lack a specific campaign_lead join table
     const allLeads = Lead.findAll();
     const activeLeads = allLeads.filter(l => l.currentStep && l.currentStep !== 'none' && l.status === 'contacted');
 
@@ -74,24 +75,25 @@ class CampaignEngine {
 
       let nextNodeId = null;
       let logMessage = "";
+      let logType = "info";
 
       switch (currentNode.type) {
-        case 'start':
-          // Move to next node immediately
-          const edgeAfterStart = edges.find(e => e.source === currentNode.id);
-          if (edgeAfterStart) nextNodeId = edgeAfterStart.target;
+        case 'start': {
+          const edge = edges.find(e => e.source === currentNode.id);
+          if (edge) nextNodeId = edge.target;
           logMessage = `Started workflow`;
+          logType = "start";
           break;
+        }
 
-        case 'sendEmail':
-          // Generate AI email and log it
-          const emailData = generateMockEmail(lead);
+        case 'sendEmail': {
+          const emailData = generateMockEmail(lead, currentNode);
           
-          // SAFETY CHECK
           const safetyCheck = SafetyService.checkSafety(lead.id, campaign.id, emailData.subject);
           if (!safetyCheck.safe) {
             logMessage = `Safety Blocked: ${safetyCheck.reason}`;
-            break; // Do not advance node, remain here until next tick
+            logType = "blocked";
+            break;
           }
 
           EmailLog.create({
@@ -102,43 +104,48 @@ class CampaignEngine {
             status: 'sent'
           });
           
-          const edgeAfterEmail = edges.find(e => e.source === currentNode.id);
-          if (edgeAfterEmail) nextNodeId = edgeAfterEmail.target;
-          logMessage = `Sent Welcome Email: "${emailData.subject}"`;
+          const edge = edges.find(e => e.source === currentNode.id);
+          if (edge) nextNodeId = edge.target;
+          logMessage = `Email sent: "${emailData.subject}"`;
+          logType = "sent";
           break;
+        }
 
-        case 'wait':
-          // In a real system, we'd check timestamps. For this manual step simulator, 
-          // processing this step just bypasses the wait and moves forward.
-          const edgeAfterWait = edges.find(e => e.source === currentNode.id);
-          if (edgeAfterWait) nextNodeId = edgeAfterWait.target;
-          logMessage = `Finished waiting (${currentNode.data.duration || 1} ${currentNode.data.unit || 'Days'})`;
+        case 'wait': {
+          const edge = edges.find(e => e.source === currentNode.id);
+          if (edge) nextNodeId = edge.target;
+          const dur = currentNode.data.duration || 1;
+          const unit = currentNode.data.unit || 'Days';
+          logMessage = `Finished waiting (${dur} ${unit})`;
+          logType = "waiting";
           break;
+        }
           
-        case 'condition':
-          // Simulate 50/50 chance of reply for the hackathon
+        case 'condition': {
           const didReply = Math.random() > 0.5;
           const handle = didReply ? 'yes' : 'no';
           
-          const edgeAfterCondition = edges.find(e => e.source === currentNode.id && e.sourceHandle === handle);
-          if (edgeAfterCondition) nextNodeId = edgeAfterCondition.target;
+          const edge = edges.find(e => e.source === currentNode.id && e.sourceHandle === handle);
+          if (edge) nextNodeId = edge.target;
           
           if (didReply) {
             Lead.update(lead.id, { status: 'replied' });
-            logMessage = `Condition evaluated: Replied (Yes path)`;
+            logMessage = `Condition: Replied → Yes path`;
           } else {
-            logMessage = `Condition evaluated: No Reply (No path)`;
+            logMessage = `Condition: No Reply → No path`;
           }
+          logType = "condition";
           break;
+        }
 
-        case 'sendFollowup':
+        case 'sendFollowup': {
           const followupSubject = `Re: Quick question regarding ${lead.company}`;
           
-          // SAFETY CHECK
-          const safetyCheckFollowup = SafetyService.checkSafety(lead.id, campaign.id, followupSubject);
-          if (!safetyCheckFollowup.safe) {
-            logMessage = `Safety Blocked: ${safetyCheckFollowup.reason}`;
-            break; // Do not advance node
+          const safetyCheck = SafetyService.checkSafety(lead.id, campaign.id, followupSubject);
+          if (!safetyCheck.safe) {
+            logMessage = `Safety Blocked: ${safetyCheck.reason}`;
+            logType = "blocked";
+            break;
           }
 
           EmailLog.create({
@@ -149,18 +156,22 @@ class CampaignEngine {
             status: 'sent'
           });
           
-          const edgeAfterFollowup = edges.find(e => e.source === currentNode.id);
-          if (edgeAfterFollowup) nextNodeId = edgeAfterFollowup.target;
-          logMessage = `Sent Follow-up Email`;
+          const edge = edges.find(e => e.source === currentNode.id);
+          if (edge) nextNodeId = edge.target;
+          logMessage = `Follow-up sent`;
+          logType = "sent";
           break;
+        }
 
-        case 'end':
+        case 'end': {
           Lead.update(lead.id, { currentStep: 'none' });
           if (lead.status === 'contacted') {
-             Lead.update(lead.id, { status: 'converted' }); // Auto-convert if they reached end without replying
+             Lead.update(lead.id, { status: 'converted' });
           }
-          logMessage = `Reached End of Workflow`;
+          logMessage = `Completed campaign`;
+          logType = "completed";
           break;
+        }
       }
 
       if (nextNodeId && currentNode.type !== 'end') {
@@ -171,7 +182,8 @@ class CampaignEngine {
         leadName: lead.name,
         company: lead.company,
         action: logMessage,
-        nodeType: currentNode.type
+        nodeType: currentNode.type,
+        logType
       });
     }
 
