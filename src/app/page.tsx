@@ -16,16 +16,19 @@ export default function HomePage() {
           Mailchimp-style outreach automation with a visual workflow builder and
           AI-generated messaging.
         </p>
-        <div className="flex gap-4 justify-center mt-8">
+        <div className="flex flex-wrap gap-4 justify-center mt-8">
           <Button asChild>
             <Link href="/leads">Upload Leads</Link>
           </Button>
           <Button variant="outline" asChild>
             <Link href="/workflow">Workflow Builder</Link>
           </Button>
+          <Button variant="outline" asChild>
+            <Link href="/ai-message">AI Message Generator</Link>
+          </Button>
         </div>
         <p className="text-sm text-muted-foreground mt-12">
-          Step 1 complete. Next: Database models and Lead upload.
+          Steps 1–4 done. AI Message Generator • Campaign Engine • Dashboard next.
         </p>
       </div>
     </main>

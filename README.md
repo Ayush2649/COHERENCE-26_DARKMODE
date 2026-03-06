@@ -276,3 +276,71 @@ Sarah,sarah@openai.com,OpenAI,Engineer
 
 - You can build a flow (Start → Send Email → Wait → Condition → Follow-up), connect nodes, and save/load workflow as JSON (nodes + edges).
 - You can proceed to **Step 5 — AI Message Generator**.
+
+---
+
+## STEP 5 — AI Message Generator ✅
+
+### What Was Implemented
+
+- **AI Service** (`src/services/aiService.ts`): builds system + user messages and calls OpenAI (`gpt-4o-mini`).
+- **API** `POST /api/ai/generate`: body `{ prompt, role, campaignContext?, leadData?: { name?, company?, role? } }`, returns `{ ok, message }`.
+- **AI Message Generator page** (`src/app/ai-message/page.tsx`): form for Prompt, Role, Campaign context, optional Lead data (name, company, role); displays generated message.
+
+### How Prompt Engineering Works
+
+- **System message**: Defines *who* the model is (e.g. “You are writing as: Sales Manager”) and constraints (“Write a single email body only, no subject line…”). Campaign context is appended so the tone and goal are clear.
+- **User message**: Contains the task (e.g. “Write a friendly cold outreach email”) and, when provided, **lead data** so the model can personalize (name, company, role).
+
+### How Personalization Is Injected
+
+- Optional `leadData: { name, company, role }` is sent in the request. The service appends to the user message: “Lead to personalize for: John, Tesla, CTO.” The model then uses that in the email (e.g. “Hi John”, “at Tesla”, “in your role as CTO”).
+
+### MVC Layer
+
+- **View**: `src/app/ai-message/page.tsx` — form and result display.
+- **Controller/Route**: `src/app/api/ai/generate/route.ts` — validates body, calls service.
+- **Service**: `src/services/aiService.ts` — `buildMessages()`, `generateMessage()`.
+
+### Setup
+
+Create `.env.local` in the project root:
+
+```
+OPENAI_API_KEY=sk-your-key-here
+```
+
+### How to Test
+
+1. Add `OPENAI_API_KEY` to `.env.local`, then run `npm run dev`.
+2. Open **http://localhost:3000/ai-message**.
+3. Use default or enter: Prompt “Write a friendly cold outreach email.”, Role “Sales Manager”, Lead: Name “John”, Company “Tesla”, Role “CTO”.
+4. Click **Generate message**. You should see a short email body (e.g. “Hi John, … at Tesla …”).
+
+### Example Generated Message
+
+Example output (actual text may vary):
+
+```
+Hi John,
+
+I noticed you're leading the charge at Tesla as CTO and wanted to reach out. We've been helping companies in tech simplify their infrastructure, and I thought it might be relevant for you.
+
+Would you be open to a brief call this week to explore if there's a fit?
+
+Best,
+[Your name]
+```
+
+### TESTING GUIDE (Step 5)
+
+| Step | Action | Expected result |
+|------|--------|-----------------|
+| 1 | Set OPENAI_API_KEY in .env.local | No “OPENAI_API_KEY is not set” error. |
+| 2 | Open http://localhost:3000/ai-message | Form with Prompt, Role, Campaign context, Lead data. |
+| 3 | Click “Generate message” with defaults | Generated email body appears below. |
+| 4 | Fill Lead: John, Tesla, CTO and generate | Message mentions John / Tesla / CTO. |
+
+### EXPECTED RESULT
+
+- You can generate outreach copy from a prompt, role, and optional campaign/lead context. Next: **Step 6 — Campaign Automation Engine**.
