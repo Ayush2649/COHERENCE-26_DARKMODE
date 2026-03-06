@@ -11,13 +11,13 @@ import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import ThemeToggle from "@/components/ThemeToggle";
 
-/* Navigation items — one for each of the 5 main views */
 const navItems = [
   { href: "/leads", label: "Upload Leads", icon: "📤" },
   { href: "/workflows", label: "Workflow Builder", icon: "🔀" },
   { href: "/ai-generator", label: "AI Generator", icon: "🤖" },
   { href: "/campaigns", label: "Campaigns", icon: "🚀" },
   { href: "/dashboard", label: "Dashboard", icon: "📊" },
+  { href: "/agent", label: "AI Agent", icon: "🤖", premium: true },
 ];
 
 export default function Navbar() {
@@ -39,9 +39,13 @@ export default function Navbar() {
           {navItems.map((item) => (
             <Link key={item.href} href={item.href}>
               <Button
-                variant={pathname === item.href ? "secondary" : "ghost"}
+                variant={pathname === item.href ? "secondary" : (item.premium ? "outline" : "ghost")}
                 size="sm"
-                className="gap-1.5 text-sm"
+                className={`gap-1.5 text-sm ${
+                  item.premium 
+                    ? "border-violet-500/30 bg-violet-500/10 text-violet-600 hover:bg-violet-500/20 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300 shadow-[0_0_15px_rgba(139,92,246,0.15)] ml-2" 
+                    : ""
+                }`}
               >
                 <span>{item.icon}</span>
                 {item.label}
