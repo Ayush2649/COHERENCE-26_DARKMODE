@@ -26,9 +26,12 @@ export default function HomePage() {
           <Button variant="outline" asChild>
             <Link href="/ai-message">AI Message Generator</Link>
           </Button>
+          <Button variant="outline" asChild>
+            <Link href="/campaign">Campaign Simulator</Link>
+          </Button>
         </div>
         <p className="text-sm text-muted-foreground mt-12">
-          Steps 1–4 done. AI Message Generator • Campaign Engine • Dashboard next.
+          Steps 1–6 done. Time simulation • Monitoring dashboard next.
         </p>
       </div>
     </main>

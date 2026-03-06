@@ -13,4 +13,15 @@ export function initDatabase(): void {
   const schemaPath = path.join(process.cwd(), "src", "database", "schema.sql");
   const sql = fs.readFileSync(schemaPath, "utf-8");
   db.exec(sql);
+  // Migration: add campaign_id to leads if missing (existing DBs), then ensure index exists
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info(leads)").all() as { name: string }[];
+    const hasCampaignId = tableInfo.some((c) => c.name === "campaign_id");
+    if (!hasCampaignId) {
+      db.exec("ALTER TABLE leads ADD COLUMN campaign_id INTEGER DEFAULT NULL");
+    }
+    db.exec("CREATE INDEX IF NOT EXISTS idx_leads_campaign_id ON leads(campaign_id)");
+  } catch {
+    // Ignore (e.g. leads table doesn't exist yet)
+  }
 }

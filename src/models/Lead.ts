@@ -16,6 +16,7 @@ export interface Lead {
   role: string | null;
   status: LeadStatus;
   currentStep: string | null;
+  campaignId: number | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -29,6 +30,7 @@ export interface LeadRow {
   role: string | null;
   status: string;
   current_step: string | null;
+  campaign_id: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -42,6 +44,7 @@ function rowToLead(row: LeadRow): Lead {
     role: row.role,
     status: row.status as LeadStatus,
     currentStep: row.current_step,
+    campaignId: row.campaign_id ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -55,11 +58,12 @@ export function createLead(data: {
   role?: string | null;
   status?: LeadStatus;
   currentStep?: string | null;
+  campaignId?: number | null;
 }): Lead {
   const db = getDb();
   const stmt = db.prepare(`
-    INSERT INTO leads (name, email, company, role, status, current_step)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO leads (name, email, company, role, status, current_step, campaign_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
   const result = stmt.run(
     data.name,
@@ -67,7 +71,8 @@ export function createLead(data: {
     data.company ?? null,
     data.role ?? null,
     data.status ?? "new",
-    data.currentStep ?? null
+    data.currentStep ?? null,
+    data.campaignId ?? null
   );
   return getLeadById(result.lastInsertRowid as number)!;
 }
@@ -97,8 +102,8 @@ export function getLeadById(id: number): Lead | null {
   return row ? rowToLead(row) : null;
 }
 
-/** Get all leads, optionally by status. */
-export function getLeads(options?: { status?: LeadStatus }): Lead[] {
+/** Get all leads, optionally by status or campaignId. */
+export function getLeads(options?: { status?: LeadStatus; campaignId?: number | null }): Lead[] {
   const db = getDb();
   let sql = "SELECT * FROM leads";
   const params: (string | number)[] = [];
@@ -106,22 +111,33 @@ export function getLeads(options?: { status?: LeadStatus }): Lead[] {
     sql += " WHERE status = ?";
     params.push(options.status);
   }
+  if (options?.campaignId != null) {
+    sql += params.length ? " AND campaign_id = ?" : " WHERE campaign_id = ?";
+    params.push(options.campaignId);
+  }
   sql += " ORDER BY id ASC";
   const rows = (params.length ? db.prepare(sql).all(...params) : db.prepare(sql).all()) as LeadRow[];
   return rows.map(rowToLead);
 }
 
-/** Update lead status and/or currentStep. */
-export function updateLead(id: number, updates: { status?: LeadStatus; currentStep?: string | null }): Lead | null {
+/** Get leads in a campaign (campaignId not null). */
+export function getLeadsByCampaignId(campaignId: number): Lead[] {
+  return getLeads({ campaignId });
+}
+
+/** Update lead status, currentStep, and/or campaignId. */
+export function updateLead(
+  id: number,
+  updates: { status?: LeadStatus; currentStep?: string | null; campaignId?: number | null }
+): Lead | null {
   const db = getDb();
   const lead = getLeadById(id);
   if (!lead) return null;
   const status = updates.status ?? lead.status;
   const currentStep = updates.currentStep !== undefined ? updates.currentStep : lead.currentStep;
-  db.prepare("UPDATE leads SET status = ?, current_step = ?, updated_at = datetime('now') WHERE id = ?").run(
-    status,
-    currentStep,
-    id
-  );
+  const campaignId = updates.campaignId !== undefined ? updates.campaignId : lead.campaignId;
+  db.prepare(
+    "UPDATE leads SET status = ?, current_step = ?, campaign_id = ?, updated_at = datetime('now') WHERE id = ?"
+  ).run(status, currentStep, campaignId, id);
   return getLeadById(id);
 }

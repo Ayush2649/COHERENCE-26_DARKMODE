@@ -4,6 +4,23 @@ Mailchimp-style outreach automation platform with a visual workflow builder and 
 
 ---
 
+## Sending real emails (Resend)
+
+To send real emails to lead addresses (e.g. your own for testing):
+
+1. **Sign up at [Resend](https://resend.com)** and create an API key at [resend.com/api-keys](https://resend.com/api-keys).
+2. **Add to `.env.local`**:
+   ```bash
+   RESEND_API_KEY=re_your_key_here
+   ```
+3. **Optional**: `RESEND_FROM` (default: `Outreach <onboarding@resend.dev>` for testing); `EMAIL_SUBJECT` (default: `Quick outreach`).
+4. **Upload leads** with real email addresses (e.g. your email) on the Lead Upload page.
+5. **Run a campaign** in the Campaign Simulator with a workflow that has Send Email or Send Follow-up nodes. When the engine hits those nodes, it will call Resend and send the AI-generated message to each lead’s email.
+
+Without `RESEND_API_KEY`, the app only logs messages to the database and does not send email.
+
+---
+
 ## STEP 1 — Project Initialization ✅
 
 ### What Was Implemented
@@ -344,3 +361,65 @@ Best,
 ### EXPECTED RESULT
 
 - You can generate outreach copy from a prompt, role, and optional campaign/lead context. Next: **Step 6 — Campaign Automation Engine**.
+
+---
+
+## STEP 6 — Campaign Automation Engine ✅
+
+### What Was Implemented
+
+- **Schema**: `leads.campaign_id` added (and migration in `initDatabase()` for existing DBs).
+- **Lead model**: `campaignId`, `getLeadsByCampaignId(campaignId)`, `updateLead(..., campaignId)`.
+- **Workflow engine** (`src/services/workflowEngine.ts`): `getStartNodeId`, `getNextNodeId`, `executeStep(workflow, lead, campaignId)`. For each node type: **start** → next; **sendEmail** / **sendFollowUp** → generate AI message, log to EmailLog, move to next; **wait** → next; **condition** → next (yes branch); **end** → done.
+- **APIs**:  
+  - `GET/POST /api/campaigns` — list, create (body: `{ workflowId }`).  
+  - `POST /api/campaigns/[id]/start` — start or advance one step (body: `{ leadIds?: number[] }`; if omitted, uses all leads with status `new`).  
+  - `GET /api/campaigns/[id]/logs` — email logs for the campaign.
+- **Campaign Simulator page** (`src/app/campaign/page.tsx`): load workflows/leads/campaigns, create campaign, (optionally) select leads, Start/Advance step, Load campaign logs.
+
+### Algorithm (workflow execution)
+
+1. **Start campaign (first time)**  
+   Set campaign status to `running`, set `start_time` if not set. For each selected lead (or all `new`), set `lead.campaign_id = campaignId` and `lead.current_step = startNodeId`.
+
+2. **One tick (each “Start / Advance step”)**  
+   For each lead in the campaign (`getLeadsByCampaignId`):  
+   - Read `lead.currentStep` (node id).  
+   - **executeStep(workflow, lead, campaignId)**:
+     - **start**: next node id from edges.
+     - **sendEmail** / **sendFollowUp**: call AI to generate message, `EmailLog.createEmailLog`, set lead status `contacted`, next node id.
+     - **wait**: next node id (delay handled in Step 7).
+     - **condition**: next node id (e.g. “yes” branch).
+     - **end**: next = null.
+   - Update `lead.current_step = nextNodeId` (and status if done).
+
+3. If all leads have `current_step === null`, set campaign status to `completed`.
+
+### How to Run Campaign and Inspect Logs
+
+1. **Init DB (if you have an old DB)**  
+   Open `GET http://localhost:3000/api/db/init` once so `campaign_id` is added to `leads`.
+
+2. **Create workflow and leads**  
+   Use Workflow Builder and Lead Upload so you have at least one workflow and a few leads.
+
+3. **Campaign Simulator**  
+   Open **http://localhost:3000/campaign**.  
+   - Load workflows → select one → **Create campaign**.  
+   - (Optional) Load leads → check specific leads, or leave unchecked to use all “new” leads.  
+   - Select the new campaign → **Start / Advance step**. First run assigns leads and moves them from Start to the next node; next runs execute the next step (e.g. send email, then wait, etc.).  
+   - **Load campaign logs** to see sent messages (from sendEmail/sendFollowUp nodes).
+
+### TESTING GUIDE (Step 6)
+
+| Step | Action | Expected result |
+|------|--------|-----------------|
+| 1 | GET /api/db/init | DB has `leads.campaign_id` (no “no such column” errors). |
+| 2 | Create workflow (e.g. Start → Send Email → End), upload leads | Workflow and leads exist. |
+| 3 | Campaign page: create campaign from workflow, click “Start / Advance step” | “Campaign started.”; leads show current step. |
+| 4 | Click “Start / Advance step” again | Emails generated and logged; leads advance or complete. |
+| 5 | “Load campaign logs” | List of email logs with message text. |
+
+### EXPECTED RESULT
+
+- You can start a campaign from a workflow, assign leads, advance steps (workflow engine runs sendEmail/sendFollowUp with AI, wait, condition, end), and inspect logs. Next: **Step 7 — Time Simulation**.
