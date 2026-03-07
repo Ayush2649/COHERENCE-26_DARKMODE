@@ -47,7 +47,9 @@ export async function POST(request) {
         targetAudience: "founder saas ceo",
         numberOfSteps: 3,
         topic: "Exploring automated outreach possibilities",
-        tone: "friendly"
+        tone: "friendly",
+        waitDuration: 15,
+        waitUnit: "Seconds"
       };
     } else {
       const intentCompletion = await openai.chat.completions.create({
@@ -62,7 +64,9 @@ Return ONLY valid JSON with no markdown, no backticks, no explanation. Format:
   "targetAudience": "string (keywords to match against lead role/company fields)",
   "numberOfSteps": number (between 2 and 5),
   "topic": "string (what the outreach is about)",
-  "tone": "professional | friendly | urgent"
+  "tone": "professional | friendly | urgent",
+  "waitDuration": number (how long to wait between steps — default 2),
+  "waitUnit": "Seconds | Minutes | Hours | Days (default Days, use Seconds if user says seconds)"
 }` 
           },
           { role: "user", content: prompt }
@@ -105,12 +109,12 @@ Return ONLY valid JSON with no markdown, no backticks, no explanation. Format:
     // ----------------------------------------------------------------------
     const workflowPlan = [{ type: "start", label: "Start" }];
     
-    let daysWait = 2;
+    const waitDur = Number(intent.waitDuration) || 2;
+    const waitUnit = String(intent.waitUnit || "Days");
     for (let i = 0; i < intent.numberOfSteps; i++) {
        workflowPlan.push({ type: "sendEmail", label: `Email ${i+1}`, emailIndex: i });
        if (i < intent.numberOfSteps - 1) {
-         workflowPlan.push({ type: "wait", label: `Wait ${daysWait} Days`, duration: daysWait, unit: "Days" });
-         daysWait++; // 2 days, then 3 days, etc.
+         workflowPlan.push({ type: "wait", label: `Wait ${waitDur} ${waitUnit}`, duration: waitDur, unit: waitUnit });
        }
     }
     workflowPlan.push({ type: "end", label: "End" });
@@ -164,7 +168,7 @@ Make each email in the sequence feel different — first is introduction, second
         position: { x: 250, y: index * 120 },
         data: { 
           label: step.label,
-          ...(step.type === 'wait' && { duration: step.duration || step.days || 2, unit: step.unit || "Days" }),
+          ...(step.type === 'wait' && { duration: step.duration, unit: step.unit }),
           ...(step.type === 'sendEmail' && { 
              subject: emails[step.emailIndex].subject, 
              body: emails[step.emailIndex].body 

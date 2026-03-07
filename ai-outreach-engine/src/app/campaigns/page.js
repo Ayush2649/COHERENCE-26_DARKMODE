@@ -95,7 +95,8 @@ export default function CampaignsPage() {
           const newLogs = result.logs.map(log => ({
             time: new Date().toLocaleTimeString(),
             message: `${log.leadName} (${log.company || 'Unknown'}): ${log.action}`,
-            type: log.nodeType
+            type: log.nodeType,
+            logType: log.logType || 'info'
           }));
           setLogs(prev => [...newLogs, ...prev]);
         }
@@ -209,8 +210,8 @@ export default function CampaignsPage() {
                     </Button>
                     
                     <div className="text-xs text-center text-muted-foreground">
-                      Simulates 1 cycle of the background cron job.
-                      Any Wait nodes are instantly bypassed for testing.
+                      Each click simulates 1 tick of the campaign engine.
+                      Leads will wait real durations at Wait nodes.
                     </div>
                   </div>
                 )}
@@ -240,6 +241,9 @@ export default function CampaignsPage() {
                         <span className="text-xs text-muted-foreground whitespace-nowrap pt-0.5">[{log.time}]</span>
                         <div className="flex-1">
                           <span className={
+                            log.logType === 'sent' ? 'text-green-500 font-medium' :
+                            log.logType === 'waiting' ? 'text-amber-500 font-medium' :
+                            log.logType === 'completed' ? 'text-purple-500 font-medium' :
                             log.type === 'sendEmail' || log.type === 'sendFollowup' ? 'text-blue-500 font-medium' :
                             log.type === 'condition' ? 'text-orange-500 font-medium' :
                             log.type === 'wait' ? 'text-amber-500 font-medium' :

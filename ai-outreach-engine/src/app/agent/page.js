@@ -125,7 +125,7 @@ export default function AgentPage() {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      clearInterval(intervalRef.current);
+      clearTimeout(intervalRef.current);
       clearInterval(timerRef.current);
     };
   }, []);
@@ -145,14 +145,15 @@ export default function AgentPage() {
     setIsRunning(true);
     if (!startTime) setStartTime(Date.now());
 
-    intervalRef.current = setInterval(async () => {
+    let data = null;
+    const wrappedTick = async () => {
       try {
         const res = await fetch("/api/campaigns/step", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ campaignId: cId })
         });
-        const data = await res.json();
+        data = await res.json();
 
         if (data.success && data.data) {
           if (data.data.logs && data.data.logs.length > 0) {
@@ -163,6 +164,7 @@ export default function AgentPage() {
               action: log.action,
               nodeType: log.nodeType,
               logType: log.logType || "info",
+              remainingMs: log.remainingMs || null,
               time: new Date().toLocaleTimeString()
             }));
             setExecLogs(prev => [...prev, ...newLogs]);
@@ -172,16 +174,37 @@ export default function AgentPage() {
           setTotalProcessed(data.total || 0);
 
           if (data.progress >= 100) {
-            clearInterval(intervalRef.current);
             setIsRunning(false);
             setPhase("complete");
             sessionStorage.removeItem(STORAGE_KEY);
+            return;
           }
         }
       } catch (err) {
         console.error("Execution step error:", err);
       }
-    }, spd);
+
+      // --- SMART SCHEDULING ---
+      if (data && data.needsDelay) {
+        // Just sent an email — wait 2s then continue ticking
+        intervalRef.current = setTimeout(wrappedTick, 2000);
+      } else if (data && data.hasReadyLeads === false && data.nextReadyAt) {
+        // ALL leads are waiting — STOP polling entirely.
+        // Set ONE timeout to fire when the earliest wait expires, then resume.
+        const sleepMs = Math.max(data.nextReadyAt - Date.now() + 300, 1000);
+        intervalRef.current = setTimeout(wrappedTick, sleepMs);
+        return; // exit — no further scheduling until timeout fires
+      } else if (data && data.hasReadyLeads === false) {
+        // All waiting, no timestamp — sleep 5s then check once
+        intervalRef.current = setTimeout(wrappedTick, 5000);
+        return;
+      } else {
+        // Leads are ready — continue at normal tick speed
+        intervalRef.current = setTimeout(wrappedTick, spd);
+      }
+    };
+
+    intervalRef.current = setTimeout(wrappedTick, 100);
   };
 
   const startExecution = useCallback((cId) => {
@@ -189,7 +212,7 @@ export default function AgentPage() {
   }, [speed]);
 
   const pauseExecution = () => {
-    clearInterval(intervalRef.current);
+    clearTimeout(intervalRef.current);
     setIsRunning(false);
   };
 
@@ -200,7 +223,7 @@ export default function AgentPage() {
   // Speed change restarts interval
   useEffect(() => {
     if (isRunning && phase === "executing" && !isRestoredRef.current) {
-      clearInterval(intervalRef.current);
+      clearTimeout(intervalRef.current);
       startExecutionDirect(campaignIdRef.current, speed);
     }
     isRestoredRef.current = false;
@@ -283,14 +306,6 @@ export default function AgentPage() {
       await new Promise(r => setTimeout(r, 600));
       updateLogStatus(createLogId, "success");
 
-      // Start campaign using existing start API
-      const startRes = await fetch("/api/campaigns/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workflowId: data.workflowId, name: data.campaignName })
-      });
-      const startData = await startRes.json();
-
       const engineLogId = addLog("🚀 Starting execution engine...", "pending");
       await new Promise(r => setTimeout(r, 800));
       updateLogStatus(engineLogId, "success");
@@ -299,7 +314,8 @@ export default function AgentPage() {
       await new Promise(r => setTimeout(r, 600));
       updateLogStatus(autoLogId, "success");
 
-      const activeCampaignId = startData.success ? startData.data.id : data.campaignId;
+      // Campaign was already created and leads assigned by the agent route
+      const activeCampaignId = data.campaignId;
       campaignIdRef.current = activeCampaignId;
       workflowIdRef.current = data.workflowId;
 
@@ -318,7 +334,7 @@ export default function AgentPage() {
 
   // -- LAYER 4: Clear on reset --
   const resetPage = () => {
-    clearInterval(intervalRef.current);
+    clearTimeout(intervalRef.current);
     clearInterval(timerRef.current);
     sessionStorage.removeItem(STORAGE_KEY);
     setPrompt(""); setAgentLogs([]); setCampaignResult(null); setExecLogs([]); setError(null);

@@ -43,6 +43,7 @@ function initializeDatabase() {
       role         TEXT DEFAULT '',
       status       TEXT DEFAULT 'new',
       currentStep  TEXT DEFAULT 'none',
+      waitUntil    TEXT DEFAULT NULL,
       createdAt    TEXT DEFAULT (datetime('now')),
       updatedAt    TEXT DEFAULT (datetime('now'))
     );
@@ -101,5 +102,12 @@ function initializeDatabase() {
 
 /* Run initialization on first import */
 initializeDatabase();
+
+/* Migration: Add waitUntil column if it doesn't exist (for existing DBs) */
+try {
+  db.prepare("SELECT waitUntil FROM leads LIMIT 1").get();
+} catch (e) {
+  db.exec("ALTER TABLE leads ADD COLUMN waitUntil TEXT DEFAULT NULL");
+}
 
 module.exports = db;
