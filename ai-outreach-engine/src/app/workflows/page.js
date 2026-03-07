@@ -35,7 +35,7 @@ import { customNodeTypes } from "@/components/WorkflowNodes";
 // Default starting workflow (Start -> Send Email)
 const initialNodes = [
   { id: "1", type: "start", position: { x: 300, y: 50 }, data: { label: "Trigger: Added to Campaign" } },
-  { id: "2", type: "sendEmail", position: { x: 300, y: 200 }, data: { label: "Generate AI Welcome Email" } }
+  { id: "2", type: "sendEmail", position: { x: 300, y: 270 }, data: { label: "Generate AI Welcome Email" } }
 ];
 
 const initialEdges = [
@@ -175,7 +175,7 @@ export default function WorkflowsPage() {
       type,
       position: { 
         x: 300 + (Math.random() * 50 - 25), 
-        y: nodes.length > 0 ? Math.max(...nodes.map(n => n.position.y)) + 150 : 100 
+        y: nodes.length > 0 ? Math.max(...nodes.map(n => n.position.y)) + 220 : 100 
       },
       data: { label },
     };

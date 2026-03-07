@@ -165,7 +165,7 @@ Make each email in the sequence feel different — first is introduction, second
       nodes.push({
         id: nodeId,
         type: step.type,
-        position: { x: 250, y: index * 120 },
+        position: { x: 250, y: index * 220 },
         data: { 
           label: step.label,
           ...(step.type === 'wait' && { duration: step.duration, unit: step.unit }),

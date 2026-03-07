@@ -250,6 +250,31 @@ export default function AgentPage() {
     window.location.href = `/workflows?load=${workflowIdRef.current}&campaignId=${campaignIdRef.current}`;
   };
 
+  const stopExecution = async () => {
+    if (confirm("Are you sure you want to completely stop this campaign? This cannot be undone.")) {
+      pauseExecution();
+      setPhase("complete");
+      sessionStorage.removeItem(STORAGE_KEY);
+      try {
+        await fetch(`/api/campaigns/${campaignIdRef.current}/status`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "stopped" })
+        });
+      } catch (e) {}
+    }
+  };
+
+  const handleNewCampaign = () => {
+    if (isRunning || phase === "executing") {
+      if (confirm("This will leave the current campaign running in the background. Are you sure you want to start a new one?")) {
+        resetPage();
+      }
+    } else {
+      resetPage();
+    }
+  };
+
   // --- MAIN LAUNCH ---
   const handleLaunch = async () => {
     if (!prompt.trim() || isLaunching) return;
@@ -585,16 +610,26 @@ export default function AgentPage() {
                   </div>
 
                   {/* Actions */}
-                  <div className="px-6 py-4 flex flex-wrap gap-2">
-                    <Button variant="outline" className="gap-2 flex-1" onClick={isRunning ? pauseExecution : resumeExecution}>
-                      {isRunning ? "⏸ Pause" : "▶️ Resume"}
-                    </Button>
-                    <Button variant="outline" className="gap-2 flex-1 border-amber-500/30 text-amber-600 hover:bg-amber-500/10 dark:text-amber-400" onClick={handleEditLiveWorkflow}>
-                      ✏️ Edit Live Workflow
-                    </Button>
-                    <Link href="/dashboard" className="flex-1">
-                      <Button variant="outline" className="gap-2 w-full">📊 View Dashboard</Button>
-                    </Link>
+                  <div className="px-6 py-4 flex flex-col gap-3">
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="outline" className="gap-2 flex-1" onClick={isRunning ? pauseExecution : resumeExecution}>
+                        {isRunning ? "⏸ Pause" : "▶️ Resume"}
+                      </Button>
+                      <Button variant="outline" className="gap-2 flex-1 border-amber-500/30 text-amber-600 hover:bg-amber-500/10 dark:text-amber-400" onClick={handleEditLiveWorkflow}>
+                        ✏️ Edit Live Workflow
+                      </Button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                       <Button variant="outline" className="gap-2 flex-1 border-red-500/30 text-red-600 hover:bg-red-500/10 dark:text-red-400" onClick={stopExecution}>
+                         🛑 Stop Campaign
+                       </Button>
+                       <Button variant="outline" className="gap-2 flex-1 border-blue-500/30 text-blue-600 hover:bg-blue-500/10 dark:text-blue-400" onClick={handleNewCampaign}>
+                         ✨ New Campaign
+                       </Button>
+                       <Link href="/dashboard" className="flex-1 min-w-[140px]">
+                         <Button variant="outline" className="gap-2 w-full">📊 Dashboard</Button>
+                       </Link>
+                    </div>
                   </div>
                 </Card>
               </div>

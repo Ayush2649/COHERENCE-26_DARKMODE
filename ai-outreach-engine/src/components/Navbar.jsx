@@ -14,7 +14,7 @@ import ThemeToggle from "@/components/ThemeToggle";
 const navItems = [
   { href: "/leads", label: "Upload Leads", icon: "📤" },
   { href: "/workflows", label: "Workflow Builder", icon: "🔀" },
-  { href: "/ai-generator", label: "AI Generator", icon: "🤖" },
+  { href: "/ai-messages", label: "AI Messages", icon: "🤖" },
   { href: "/campaigns", label: "Campaigns", icon: "🚀" },
   { href: "/dashboard", label: "Dashboard", icon: "📊" },
   { href: "/agent", label: "AI Agent", icon: "🤖", premium: true },

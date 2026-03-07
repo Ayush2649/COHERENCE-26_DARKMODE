@@ -58,11 +58,11 @@ export async function POST() {
       name: "Cold Outreach Flow",
       nodes: [
         { id: "1", type: "start", position: { x: 250, y: 0 }, data: { label: "Start" } },
-        { id: "2", type: "sendEmail", position: { x: 250, y: 100 }, data: { label: "Send Cold Email" } },
-        { id: "3", type: "wait", position: { x: 250, y: 200 }, data: { label: "Wait 3 Hours" } },
-        { id: "4", type: "condition", position: { x: 250, y: 300 }, data: { label: "Reply Received?" } },
-        { id: "5", type: "sendFollowup", position: { x: 400, y: 400 }, data: { label: "Send Follow-up" } },
-        { id: "6", type: "end", position: { x: 250, y: 500 }, data: { label: "End" } },
+        { id: "2", type: "sendEmail", position: { x: 250, y: 220 }, data: { label: "Send Cold Email" } },
+        { id: "3", type: "wait", position: { x: 250, y: 440 }, data: { label: "Wait 3 Hours" } },
+        { id: "4", type: "condition", position: { x: 250, y: 660 }, data: { label: "Reply Received?" } },
+        { id: "5", type: "sendFollowup", position: { x: 450, y: 880 }, data: { label: "Send Follow-up" } },
+        { id: "6", type: "end", position: { x: 250, y: 1100 }, data: { label: "End" } },
       ],
       edges: [
         { id: "e1-2", source: "1", target: "2" },

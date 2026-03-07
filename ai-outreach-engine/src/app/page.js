@@ -44,7 +44,7 @@ const features = [
     borderColor: "hover:border-purple-500/50",
   },
   {
-    href: "/ai-generator",
+    href: "/ai-messages",
     icon: "🤖",
     title: "AI Message Generator",
     description:
