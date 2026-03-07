@@ -178,6 +178,17 @@
   animation: float 6s ease-in-out infinite;
 }
 
+/* Dynamic background dots — subtle drift (Antigravity-style) */
+@keyframes float-dot {
+  0%, 100% { transform: translate(0, 0) scale(1); opacity: inherit; }
+  25% { transform: translate(2px, -3px) scale(1.05); opacity: inherit; }
+  50% { transform: translate(-1px, 2px) scale(0.98); opacity: inherit; }
+  75% { transform: translate(3px, 1px) scale(1.02); opacity: inherit; }
+}
+.animate-float-dot {
+  animation: float-dot ease-in-out infinite;
+}
+
 /* Grid background — adapts to theme */
 .bg-grid {
   background-image:
@@ -200,6 +211,9 @@
   background: radial-gradient(ellipse at top, rgba(129, 140, 248, 0.08) 0%, transparent 50%),
               radial-gradient(ellipse at bottom right, rgba(192, 132, 252, 0.06) 0%, transparent 50%);
 }
+
+/* GSAP / Framer Motion — Antigravity background uses will-change: transform for dots */
+/* Hover and tap animations are driven by Framer Motion (Navbar, hero, cards). */
 
 /* Smooth scrolling */
 html {

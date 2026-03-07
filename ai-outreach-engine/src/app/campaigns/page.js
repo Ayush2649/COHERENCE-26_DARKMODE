@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { Rocket, Pencil, Play, Radio } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -125,27 +126,23 @@ export default function CampaignsPage() {
   const progressPercentage = leadsStatus.total === 0 ? 0 : Math.round((leadsStatus.completed / leadsStatus.total) * 100);
 
   return (
-    <div className="min-h-screen bg-grid bg-radial-gradient">
+    <div className="min-h-screen">
       <Navbar />
-      
-      <main className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8">
-        <div className="mb-8 flex items-center justify-between border-b pb-6">
+
+      <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
+        <div className="mb-8 flex flex-wrap items-center justify-between gap-4 border-b border-border/60 pb-6">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Campaign Simulator</h1>
-            <p className="mt-2 text-muted-foreground">
-              Manually step through the campaign engine to watch leads process through your workflows.
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Campaigns</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Step through the campaign engine and watch leads move through workflows.
             </p>
           </div>
-          <Badge variant="outline" className="bg-amber-500/10 text-amber-600 dark:text-amber-400">
-             Step-by-Step Mode
-          </Badge>
+          <Badge variant="secondary" className="text-xs font-normal">Step-by-step</Badge>
         </div>
 
         <div className="grid gap-8 lg:grid-cols-3">
-          
-          {/* Left Column: Controls */}
           <div className="space-y-6 lg:col-span-1">
-            <Card className="border-border/50 bg-card/80 backdrop-blur-sm shadow-sm">
+            <Card className="border-border/60 bg-card/80 shadow-sm">
               <CardHeader>
                 <CardTitle>Simulation Control</CardTitle>
                 <CardDescription>Select workflow and trigger execution steps.</CardDescription>
@@ -168,12 +165,13 @@ export default function CampaignsPage() {
                       </Select>
                     </div>
                     
-                    <Button 
-                      className="w-full" 
-                      onClick={startCampaign} 
+                    <Button
+                      className="w-full gap-2"
+                      onClick={startCampaign}
                       disabled={isStarting || !selectedWorkflowId}
                     >
-                      {isStarting ? "Initializing..." : "🚀 Start Simulation"}
+                      <Rocket className="h-4 w-4" />
+                      {isStarting ? "Initializing..." : "Start campaign"}
                     </Button>
                   </div>
                 ) : (
@@ -183,8 +181,9 @@ export default function CampaignsPage() {
                       <div className="font-medium truncate mb-3">{activeCampaign.name}</div>
                       
                       <Link href={`/workflows?load=${activeCampaign.workflowId}&campaignId=${activeCampaign.id}`}>
-                        <Button variant="outline" size="sm" className="w-full gap-2 border-amber-500/30 text-amber-600 hover:bg-amber-500/10 dark:text-amber-400">
-                          <span>✏️</span> Edit Live Workflow
+                        <Button variant="outline" size="sm" className="w-full gap-2">
+                          <Pencil className="h-3.5 w-3.5" />
+                          Edit workflow
                         </Button>
                       </Link>
                     </div>
@@ -200,13 +199,13 @@ export default function CampaignsPage() {
                       </div>
                     </div>
 
-                    <Button 
-                      className="w-full text-lg h-14 relative overflow-hidden group" 
-                      onClick={processStep} 
+                    <Button
+                      className="w-full h-12 gap-2"
+                      onClick={processStep}
                       disabled={isStepping || progressPercentage === 100}
                     >
-                      <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-[shimmer_1s_infinite]" />
-                      {isStepping ? "Processing..." : "⏭️ Step Forward"}
+                      {isStepping ? <Radio className="h-4 w-4 animate-pulse" /> : <Play className="h-4 w-4" />}
+                      {isStepping ? "Processing..." : "Step forward"}
                     </Button>
                     
                     <div className="text-xs text-center text-muted-foreground">
@@ -222,17 +221,17 @@ export default function CampaignsPage() {
 
           {/* Right Column: Execution Logs */}
           <div className="lg:col-span-2">
-            <Card className="border-border/50 bg-card/80 backdrop-blur-sm shadow-sm h-full flex flex-col min-h-[500px]">
-              <CardHeader className="border-b border-border/50 bg-muted/20">
-                <CardTitle>Execution Logs</CardTitle>
+            <Card className="border-border/60 bg-card/80 shadow-sm h-full flex flex-col min-h-[500px]">
+              <CardHeader className="border-b border-border/60">
+                <CardTitle className="text-base font-medium">Execution log</CardTitle>
                 <CardDescription>Live feed of node executions for all active leads.</CardDescription>
               </CardHeader>
               <CardContent className="flex-1 p-0 overflow-hidden relative">
                 
                 {logs.length === 0 ? (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground opacity-60">
-                    <span className="text-4xl mb-3">📡</span>
-                    <p>Start a campaign to view live logs.</p>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground">
+                    <Radio className="mb-3 h-10 w-10 opacity-50" />
+                    <p className="text-sm">Start a campaign to see live logs.</p>
                   </div>
                 ) : (
                   <div className="h-full overflow-y-auto p-4 space-y-3 font-mono text-sm">

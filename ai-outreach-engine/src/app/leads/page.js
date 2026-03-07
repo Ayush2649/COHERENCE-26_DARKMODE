@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Papa from "papaparse";
+import { Upload, Save, Loader2, FileText, Eye } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
@@ -101,22 +102,20 @@ export default function LeadsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-grid bg-radial-gradient">
+    <div className="min-h-screen">
       <Navbar />
-      
-      <main className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8">
+
+      <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold tracking-tight">Upload Leads</h1>
-          <p className="mt-2 text-muted-foreground">
-            Import your contacts via CSV to build your outreach audience.
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Upload Leads</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Import contacts via CSV to build your outreach audience.
           </p>
         </div>
 
         <div className="grid gap-8 lg:grid-cols-3">
-          
-          {/* Left Column: Upload Controls */}
           <div className="lg:col-span-1 space-y-6">
-            <Card className="border-border/50 bg-card/60 backdrop-blur-sm shadow-sm transition-all hover:shadow-md">
+            <Card className="border-border/60 bg-card/80 shadow-sm">
               <CardHeader>
                 <CardTitle className="text-xl">Import CSV</CardTitle>
                 <CardDescription>
@@ -129,9 +128,9 @@ export default function LeadsPage() {
                 
                 {/* File Input Area */}
                 <div className="flex w-full items-center justify-center">
-                  <label htmlFor="dropzone-file" className={`flex h-40 w-full cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed transition-colors ${file ? 'border-primary/50 bg-primary/5' : 'border-border hover:border-primary/50 hover:bg-muted/50'}`}>
+                  <label htmlFor="dropzone-file" className={`flex h-40 w-full cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed transition-colors ${file ? "border-primary/40 bg-primary/5" : "border-border/60 hover:border-primary/30 hover:bg-muted/50"}`}>
                     <div className="flex flex-col items-center justify-center pb-6 pt-5">
-                      <span className="mb-3 text-3xl">📄</span>
+                      <FileText className="mb-3 h-10 w-10 text-muted-foreground" />
                       <p className="mb-2 text-sm text-muted-foreground">
                         <span className="font-semibold">{file ? file.name : "Click to upload"}</span>
                       </p>
@@ -159,23 +158,19 @@ export default function LeadsPage() {
 
               </CardContent>
               <CardFooter>
-                <Button 
-                  className="w-full gap-2" 
-                  onClick={handleUpload} 
+                <Button
+                  className="w-full gap-2"
+                  onClick={handleUpload}
                   disabled={parsedLeads.length === 0 || isUploading}
                 >
-                  {isUploading ? (
-                     <span className="animate-spin text-lg leading-none">⚙️</span>
-                  ) : (
-                    <span>💾</span>
-                  )}
+                  {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   {isUploading ? "Saving..." : `Save ${parsedLeads.length} Leads`}
                 </Button>
               </CardFooter>
             </Card>
 
             {/* Sample File Download Helper */}
-            <Card className="border-border/50 bg-card/60 backdrop-blur-sm shadow-sm">
+            <Card className="border-border/60 bg-card/80 shadow-sm">
                <CardHeader className="pb-3">
                  <CardTitle className="text-sm">Need a sample file?</CardTitle>
                </CardHeader>
@@ -191,7 +186,7 @@ export default function LeadsPage() {
 
           {/* Right Column: Preview Table */}
           <div className="lg:col-span-2">
-            <Card className="border-border/50 bg-card/60 backdrop-blur-sm shadow-sm h-full flex flex-col">
+            <Card className="border-border/60 bg-card/80 shadow-sm h-full flex flex-col">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <div>
                   <CardTitle className="text-xl">Preview</CardTitle>
@@ -231,9 +226,9 @@ export default function LeadsPage() {
                     )}
                   </div>
                 ) : (
-                  <div className="flex h-full min-h-[300px] flex-col items-center justify-center rounded-md border border-dashed border-border/50 bg-muted/10 text-center">
-                    <span className="mb-4 text-4xl">👀</span>
-                    <h3 className="text-lg font-medium">No data to preview</h3>
+                  <div className="flex h-full min-h-[300px] flex-col items-center justify-center rounded-lg border border-dashed border-border/60 bg-muted/20 text-center">
+                    <Eye className="mb-4 h-10 w-10 text-muted-foreground" />
+                    <h3 className="text-base font-medium text-foreground">No data to preview</h3>
                     <p className="mt-1 text-sm text-muted-foreground max-w-sm">
                       Upload a CSV file to see a preview of how your leads will be imported.
                     </p>

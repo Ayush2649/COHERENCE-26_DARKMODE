@@ -1,14 +1,10 @@
 /**
  * Root Layout (MVC: View Layer)
- * 
- * Sets up:
- * - Google Fonts (Geist Sans + Geist Mono)
- * - ThemeProvider for light/dark mode toggle
- * - Global CSS variables and ShadCN theming
- * - SEO metadata
+ * Light-first, minimal design with dynamic background.
  */
 import { Geist, Geist_Mono } from "next/font/google";
 import ThemeProvider from "@/components/ThemeProvider";
+import ParticleBackground from "@/components/ParticleBackground";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -30,11 +26,14 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen text-foreground`}
       >
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <ParticleBackground />
+          <div className="relative min-h-screen">{children}</div>
+        </ThemeProvider>
       </body>
     </html>
   );

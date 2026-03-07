@@ -5,16 +5,21 @@ import Navbar from "@/components/Navbar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer, 
-  Cell
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+  AreaChart,
+  Area,
+  PieChart,
+  Pie,
 } from "recharts";
+import { Users, Mail, Rocket, Target, MailCheck, Zap, Lightbulb, TrendingUp } from "lucide-react";
 
 /**
  * Monitoring Dashboard
@@ -44,87 +49,238 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Format array colors for funnel chart
-  const funnelColors = [
-    "hsl(var(--primary))", // Uploaded
-    "hsl(var(--chart-2))", // Contacted
-    "hsl(var(--chart-3))", // Replied
-    "hsl(var(--chart-4))", // Converted
-  ];
+  // Chart colors that stay visible in both light and dark mode
+  const funnelColors = ["#6366f1", "#10b981", "#f59e0b", "#ec4899"];
+  const pieColors = ["#6366f1", "#10b981", "#f59e0b", "#ec4899"];
+  const campaignBarColors = ["#6366f1", "#8b5cf6", "#a78bfa", "#c4b5fd", "#ddd6fe"];
+
+  const totalForPct = data?.funnelData?.reduce((s, d) => s + d.value, 0) || 1;
+  const FunnelTooltip = ({ active, payload }) => {
+    if (!active || !payload?.length) return null;
+    const p = payload[0].payload;
+    const pct = totalForPct ? Math.round((p.value / totalForPct) * 100) : 0;
+    return (
+      <div className="rounded-lg border border-border bg-card px-3 py-2 text-sm shadow-md dark:border-white/10 dark:bg-[oklch(0.18_0.008_285)]">
+        <div className="font-medium text-foreground">{p.name}</div>
+        <div className="text-muted-foreground">{p.value} leads ({pct}%)</div>
+      </div>
+    );
+  };
+  const PieTooltip = ({ active, payload }) => {
+    if (!active || !payload?.length) return null;
+    const p = payload[0].payload;
+    const total = data?.leadStatusBreakdown?.reduce((s, d) => s + d.value, 0) || 1;
+    const pct = total ? Math.round((p.value / total) * 100) : 0;
+    return (
+      <div className="rounded-lg border border-border bg-card px-3 py-2 text-sm shadow-md dark:border-white/10 dark:bg-[oklch(0.18_0.008_285)]">
+        <div className="font-medium text-foreground">{p.name}</div>
+        <div className="text-muted-foreground">{p.value} ({pct}%)</div>
+      </div>
+    );
+  };
 
   return (
-    <div className="min-h-screen bg-grid bg-radial-gradient">
+    <div className="min-h-screen">
       <Navbar />
-      
-      <main className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8 space-y-8">
-        <div className="flex items-center justify-between border-b pb-6">
+
+      <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 space-y-8">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6 dark:border-white/10">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Monitoring Dashboard</h1>
-            <p className="mt-2 text-muted-foreground">
-              Real-time campaign metrics, funnel analysis, and outreach activity.
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Dashboard</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Live metrics from your campaigns, leads, and email activity
             </p>
           </div>
-          <Badge variant="outline" className="bg-primary/10 text-primary animate-pulse">
-            Live Updates (10s)
+          <Badge variant="secondary" className="text-xs font-normal">
+            Refreshes every 10s
           </Badge>
         </div>
 
-        {/* Top 4 Metric Cards */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          <MetricCard 
-            title="Total Leads" 
-            value={data?.metrics.totalLeads} 
-            icon="👥" 
-            isLoading={isLoading} 
-          />
-          <MetricCard 
-            title="Emails Sent" 
-            value={data?.metrics.emailsSent} 
-            icon="📤" 
-            isLoading={isLoading} 
-          />
-          <MetricCard 
-            title="Active Campaigns" 
-            value={data?.metrics.activeCampaigns} 
-            icon="🚀" 
-            isLoading={isLoading} 
-          />
-          <MetricCard 
-            title="Conversion Rate" 
-            value={data?.metrics.conversionRate !== undefined ? `${data.metrics.conversionRate}%` : null} 
-            icon="🎯" 
-            isLoading={isLoading} 
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          <MetricCard title="Total Leads" value={data?.metrics.totalLeads} Icon={Users} isLoading={isLoading} subtext="In database" />
+          <MetricCard title="Emails Sent" value={data?.metrics.emailsSent} Icon={Mail} isLoading={isLoading} subtext="All time" />
+          <MetricCard title="Active Campaigns" value={data?.metrics.activeCampaigns} Icon={Rocket} isLoading={isLoading} subtext="Currently running" />
+          <MetricCard
+            title="Conversion Rate"
+            value={data?.metrics.conversionRate !== undefined ? `${data.metrics.conversionRate}%` : null}
+            Icon={Target}
+            isLoading={isLoading}
+            subtext="Leads → Converted"
           />
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
-          
-          {/* Main Funnel Chart */}
-          <Card className="lg:col-span-4 border-border/50 bg-card/60 backdrop-blur-sm shadow-sm overflow-hidden flex flex-col">
-            <CardHeader>
-              <CardTitle>Conversion Funnel</CardTitle>
-              <CardDescription>Visualizing lead progression from upload to conversion.</CardDescription>
+        {/* Row: Emails over time + Lead status pie */}
+        <div className="grid gap-6 lg:grid-cols-5">
+          <Card className="lg:col-span-3 border border-border bg-card shadow-sm overflow-hidden dark:bg-[oklch(0.16_0.008_285)] dark:border-white/10">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-medium">Emails sent (last 7 days)</CardTitle>
+              <CardDescription className="text-xs">Daily volume</CardDescription>
             </CardHeader>
-            <CardContent className="flex-1 min-h-[350px]">
+            <CardContent className="h-[260px]">
               {isLoading ? (
-                <Skeleton className="h-full w-full rounded-xl" />
+                <Skeleton className="h-full w-full rounded-lg" />
+              ) : data?.emailsByDay?.length ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={data.emailsByDay} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#6366f1" stopOpacity={0.35} />
+                        <stop offset="100%" stopColor="#6366f1" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border dark:stroke-white/10" vertical={false} />
+                    <XAxis dataKey="day" tick={{ fontSize: 11 }} className="text-muted-foreground" axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11 }} className="text-muted-foreground" axisLine={false} tickLine={false} width={28} />
+                    <Tooltip
+                      contentStyle={{ borderRadius: 8, border: "1px solid var(--border)", backgroundColor: "var(--card)", color: "var(--card-foreground)", fontSize: 12 }}
+                      formatter={(value) => [value, "Emails"]}
+                      labelFormatter={(label) => label}
+                    />
+                    <Area type="monotone" dataKey="emails" stroke="#6366f1" fill="url(#areaGradient)" strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">No email data yet</div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="lg:col-span-2 border border-border bg-card shadow-sm overflow-hidden dark:bg-[oklch(0.16_0.008_285)] dark:border-white/10">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-medium text-foreground">Lead status</CardTitle>
+              <CardDescription className="text-xs text-muted-foreground">Breakdown by stage</CardDescription>
+            </CardHeader>
+            <CardContent className="h-[260px]">
+              {isLoading ? (
+                <Skeleton className="h-full w-full rounded-lg" />
+              ) : data?.leadStatusBreakdown?.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={data.leadStatusBreakdown}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={52}
+                      outerRadius={80}
+                      paddingAngle={2}
+                      label={({ name, value }) => `${name}: ${value}`}
+                      labelLine={false}
+                    >
+                      {data.leadStatusBreakdown.map((entry, i) => (
+                        <Cell key={i} fill={pieColors[i % pieColors.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<PieTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">No leads yet</div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Row: Emails by campaign + Quick insights */}
+        <div className="grid gap-6 lg:grid-cols-5">
+          <Card className="lg:col-span-3 border border-border bg-card shadow-sm overflow-hidden dark:bg-[oklch(0.16_0.008_285)] dark:border-white/10">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-medium text-foreground">Emails by campaign</CardTitle>
+              <CardDescription className="text-xs">Volume per campaign (top 10)</CardDescription>
+            </CardHeader>
+            <CardContent className="h-[240px]">
+              {isLoading ? (
+                <Skeleton className="h-full w-full rounded-lg" />
+              ) : data?.campaignsWithEmailCount?.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={data.campaignsWithEmailCount}
+                    layout="vertical"
+                    margin={{ top: 8, right: 24, left: 0, bottom: 8 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} className="stroke-border dark:stroke-white/10" />
+                    <XAxis type="number" tick={{ fontSize: 11 }} className="text-muted-foreground" axisLine={false} tickLine={false} />
+                    <YAxis
+                      dataKey="name"
+                      type="category"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: "var(--foreground)", fontSize: 11 }}
+                      width={100}
+                      tickFormatter={(v) => (v.length > 18 ? v.slice(0, 16) + "…" : v)}
+                    />
+                    <Tooltip
+                      contentStyle={{ borderRadius: 8, border: "1px solid var(--border)", backgroundColor: "var(--card)", color: "var(--card-foreground)", fontSize: 12 }}
+                      formatter={(value) => [value, "Emails sent"]}
+                      labelFormatter={(label) => label}
+                    />
+                    <Bar dataKey="emails" radius={[0, 4, 4, 0]} barSize={22} fill="#6366f1">
+                      {data.campaignsWithEmailCount.map((_, i) => (
+                        <Cell key={i} fill={campaignBarColors[i % campaignBarColors.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">No campaign email data yet</div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="lg:col-span-2 border border-border bg-card shadow-sm dark:bg-[oklch(0.16_0.008_285)] dark:border-white/10">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-medium text-foreground flex items-center gap-2">
+                <Lightbulb className="h-4 w-4 text-amber-500" />
+                Quick insights
+              </CardTitle>
+              <CardDescription className="text-xs">Data-driven summary</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="space-y-2">
+                  {[1, 2, 3].map((i) => <Skeleton key={i} className="h-8 w-full rounded" />)}
+                </div>
+              ) : data?.insights?.length > 0 ? (
+                <ul className="space-y-3">
+                  {data.insights.map((insight, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm text-foreground">
+                      <TrendingUp className="h-4 w-4 shrink-0 mt-0.5 text-primary/70" />
+                      <span>{insight}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted-foreground">Run campaigns to see insights.</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-7">
+          <Card className="lg:col-span-4 border border-border bg-card shadow-sm overflow-hidden flex flex-col dark:bg-[oklch(0.16_0.008_285)] dark:border-white/10">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-medium text-foreground">Conversion funnel</CardTitle>
+              <CardDescription className="text-xs text-muted-foreground">Lead progression (count per stage)</CardDescription>
+            </CardHeader>
+            <CardContent className="flex-1 min-h-[300px]">
+              {isLoading ? (
+                <Skeleton className="h-full w-full rounded-lg" />
               ) : data?.funnelData ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={data.funnelData} layout="vertical" margin={{ top: 20, right: 30, left: 40, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
+                  <BarChart data={data.funnelData} layout="vertical" margin={{ top: 12, right: 40, left: 8, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" className="dark:stroke-white/10" />
                     <XAxis type="number" hide />
-                    <YAxis 
-                      dataKey="name" 
-                      type="category" 
-                      axisLine={false} 
-                      tickLine={false} 
-                      tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12, fontWeight: 500 }}
+                    <YAxis
+                      dataKey="name"
+                      type="category"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: "var(--foreground)", fontSize: 12, fontWeight: 500 }}
+                      width={120}
                     />
-                    <Tooltip 
-                      cursor={{ fill: 'hsl(var(--muted)/0.5)' }} 
-                      contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))', backgroundColor: 'hsl(var(--card))' }}
-                    />
-                    <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={40}>
+                    <Tooltip content={<FunnelTooltip />} />
+                    <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={36} label={{ position: "right", fill: "var(--foreground)", fontSize: 12, formatter: (v) => v }}>
                       {data.funnelData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={funnelColors[index % funnelColors.length]} />
                       ))}
@@ -132,70 +288,71 @@ export default function DashboardPage() {
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="flex h-full items-center justify-center text-muted-foreground">No data available</div>
+                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">No data</div>
               )}
             </CardContent>
           </Card>
 
-          {/* Recent Activity Feed */}
-          <Card className="lg:col-span-3 border-border/50 bg-card/60 backdrop-blur-sm shadow-sm flex flex-col">
-            <CardHeader>
-              <CardTitle>Recent Activity</CardTitle>
-              <CardDescription>Live log of campaign engine actions.</CardDescription>
+          <Card className="lg:col-span-3 border border-border bg-card shadow-sm flex flex-col dark:bg-[oklch(0.16_0.008_285)] dark:border-white/10">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-medium text-foreground">Recent activity</CardTitle>
+              <CardDescription className="text-xs text-muted-foreground">Latest emails sent</CardDescription>
             </CardHeader>
-            <CardContent className="flex-1 pr-6">
+            <CardContent className="flex-1 min-h-0">
               {isLoading ? (
-                <div className="space-y-4">
-                  {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-16 w-full" />)}
+                <div className="space-y-3">
+                  {[1, 2, 3].map((i) => <Skeleton key={i} className="h-14 w-full rounded-lg" />)}
                 </div>
               ) : data?.recentActivity?.length > 0 ? (
-                <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-border before:to-transparent">
+                <div className="space-y-4">
                   {data.recentActivity.map((activity, i) => (
-                    <div key={activity.id || i} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-                      {/* Timeline Dot */}
-                      <div className="flex items-center justify-center w-10 h-10 rounded-full border border-background bg-primary/20 text-primary shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 relative z-10">
-                         {activity.status === 'sent' ? '📧' : '⚡'}
+                    <div key={activity.id || i} className="flex items-start gap-3 rounded-lg border border-border bg-muted/40 p-3 dark:border-white/10 dark:bg-white/5">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary dark:bg-primary/25">
+                        {activity.status === "sent" ? <MailCheck className="h-4 w-4" /> : <Zap className="h-4 w-4" />}
                       </div>
-                      
-                      {/* Event Content */}
-                      <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] bg-card border border-border/50 p-3 rounded-lg shadow-sm">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-semibold text-sm">{activity.target}</span>
-                          <span className="text-xs text-muted-foreground font-mono">{activity.time}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-medium text-foreground truncate">{activity.target}</span>
+                          <span className="text-xs text-muted-foreground shrink-0">{activity.time}</span>
                         </div>
-                        <p className="text-xs text-muted-foreground truncate">{activity.action}</p>
+                        <p className="text-xs text-muted-foreground truncate mt-0.5">{activity.action}</p>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="flex h-[200px] flex-col items-center justify-center text-muted-foreground opacity-60">
-                   <span className="text-4xl mb-2">📭</span>
-                   <p className="text-sm">No recent activity.</p>
+                <div className="flex h-[180px] flex-col items-center justify-center text-sm text-muted-foreground">
+                  <Mail className="h-8 w-8 opacity-40 mb-2" />
+                  <p>No recent activity</p>
                 </div>
               )}
             </CardContent>
           </Card>
-
         </div>
       </main>
     </div>
   );
 }
 
-// Helper component for top metrics
-function MetricCard({ title, value, icon, isLoading }) {
+function MetricCard({ title, value, Icon, isLoading, subtext }) {
   return (
-    <Card className="border-border/50 bg-card/60 backdrop-blur-sm shadow-sm transition-all hover:-translate-y-1 hover:shadow-md">
+    <Card className="border border-border bg-card shadow-sm dark:bg-[oklch(0.16_0.008_285)] dark:border-white/10">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
-        <span className="text-xl opacity-80">{icon}</span>
+        {Icon && (
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-muted-foreground dark:bg-white/10 dark:text-foreground">
+            <Icon className="h-4 w-4" />
+          </div>
+        )}
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <Skeleton className="h-8 w-[100px]" />
+          <Skeleton className="h-8 w-20" />
         ) : (
-          <div className="text-3xl font-bold">{value !== null && value !== undefined ? value : "0"}</div>
+          <>
+            <div className="text-2xl font-semibold text-foreground">{value !== null && value !== undefined ? value : "0"}</div>
+            {subtext && <p className="text-xs text-muted-foreground mt-1">{subtext}</p>}
+          </>
         )}
       </CardContent>
     </Card>
